@@ -96,10 +96,13 @@ public class AtomicAccessLogHandler implements AccessLogHandler {
 			//append to existing log file, this should be running in a single thread
 			writer = new BufferedWriter(new FileWriter(accessLogLocation, true),
 					ACCESS_LOG_BUFFER);
-			while (true) {
+			OUTER: while (true) {
 				String msg = null;
 				// will wait until something is in queue
 				while ((msg = accessLogQueue.take()) != null) {
+					if ("quit".equals(msg)){
+						break OUTER;
+					}
 					writer.write(msg);
 					writer.newLine();
 				}
@@ -111,7 +114,6 @@ public class AtomicAccessLogHandler implements AccessLogHandler {
 					"Error writing access logs to file", e);
 		} finally {
 			try {
-				writer.flush();
 				writer.close();
 			} catch (IOException e) {
 				LOGGER.info("could not close BufferedWriter after writing access logs");
@@ -123,6 +125,7 @@ public class AtomicAccessLogHandler implements AccessLogHandler {
 	public void cleanUp(){
 		if (writer != null){
 			try {
+				accessLogQueue.offer("quit");
 				// close will flush the reader, use close since this may be called more than once during shutdown
 				writer.close();
 			} catch (IOException e) {

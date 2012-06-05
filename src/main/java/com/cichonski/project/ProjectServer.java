@@ -64,6 +64,8 @@ public class ProjectServer {
 	private final ServerSocket server;
 	// threadpool for handling requests
 	private final ExecutorService threadPool;
+	// shutdown flag
+	private volatile boolean shutdown = false;
 
 	/**
 	 * <p>Construct a new instance of a ProjectServer. Returned instance will already be accepting requests on specified port.</p>
@@ -116,23 +118,30 @@ public class ProjectServer {
 	 * shutdown.</p>
 	 */
 	public void shutDown() {
-		serverThread.interrupt();
-		// this may get covered by the shutdownHook, but not always and it won't hurt if it is duplicate
-		persistRequestCount();
-		accessLogHandler.cleanUp();
-		// this is not guaranteed to finish, but there is no need to wait since
-		// we are shutting down.
-		threadPool.shutdownNow();
-		try {
-			if (server != null && !server.isClosed()) {
-				LOGGER.info("Server shutting down, SocketExceptions may occur");
-				server.close();
+		// note: this was hanging previously, used "kill -3 [pid]" to find culprit thread...useful for the future.
+		if (!shutdown){
+			shutdown = true;
+			threadPool.shutdown();
+			while (true) {
+				//wait till everything is shutdown
+				if (threadPool.isTerminated()) {
+					// this may get covered by the shutdownHook, but not always and it won't hurt if it is duplicate
+					persistRequestCount();
+					accessLogHandler.cleanUp();
+					try {
+						if (server != null && !server.isClosed()) {
+							LOGGER.info("Server shutting down, SocketExceptions may occur");
+							server.close();
+						}
+					} catch (IOException e) {
+						LOGGER.log(Level.WARNING,
+								"Error occurred while closing Server Socket", e);
+					}
+					break;
+				}
 			}
-		} catch (IOException e) {
-			LOGGER.log(Level.WARNING,
-					"Error occurred while closing Server Socket", e);
 		}
-		// no need to call anything that is handled by ShutdownHook.
+
 	}
 	
 	
@@ -163,7 +172,7 @@ public class ProjectServer {
 		Thread t = new Thread(new Runnable() {
 			public void run() {
 				try {
-					while (!Thread.currentThread().isInterrupted()) {
+					while (!shutdown) {
 						// kick off main worker threads to handle connections.
 						ConnectionHandler handler = new ConnectionHandler(server.accept(), accessLogHandler);
 						threadPool.execute(handler);

@@ -30,7 +30,7 @@ public class ProjectServerTest extends TestCase {
 	// this is set to 50 b/c due to the limitations of my development system, should be able to raise to 100.
 	private static final int THREADS = 50;
 	// requests each thread should send
-	private static final int REQUESTS = 10;
+	private static final int REQUESTS = 20;
 	// default port-number
 	private static final int DEFAULT_PORT = 8189;
 	
