@@ -38,6 +38,8 @@ public class AtomicAccessLogHandler implements AccessLogHandler {
 	private final AtomicLong requestCounter;
 	// writer for writing access logs, initialized once during run
 	private BufferedWriter writer = null;
+	// shutdown flag
+	private boolean shutdown = false;
 	
 	
 	/**
@@ -100,7 +102,8 @@ public class AtomicAccessLogHandler implements AccessLogHandler {
 				String msg = null;
 				// will wait until something is in queue
 				while ((msg = accessLogQueue.take()) != null) {
-					if ("quit".equals(msg)){
+					if ("quit".equals(msg) && shutdown){
+						//check shutdown flag in case a worker thread adds the message inadvertently 
 						break OUTER;
 					}
 					writer.write(msg);
@@ -123,11 +126,13 @@ public class AtomicAccessLogHandler implements AccessLogHandler {
 	
 	/** {@inheritDoc} */
 	public void cleanUp(){
-		if (writer != null){
+		if (!shutdown){
 			try {
+				shutdown = true;
 				accessLogQueue.offer("quit");
-				// close will flush the reader, use close since this may be called more than once during shutdown
-				writer.close();
+				if (writer != null){
+					writer.close();
+				}
 			} catch (IOException e) {
 				LOGGER.info("could not flush access logs during shutdown");
 			} 
